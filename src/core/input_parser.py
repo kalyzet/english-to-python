@@ -9,7 +9,28 @@ from typing import Dict, List, Optional, Tuple, Any
 from dataclasses import dataclass
 from enum import Enum
 
-from ..models import ParsedSentence, Operation, Condition, PatternType
+try:
+    from ..models import ParsedSentence, Operation, Condition, PatternType
+except (ImportError, ValueError):
+    # Fallback for when running tests or direct imports
+    import sys
+    import os
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    src_dir = os.path.dirname(current_dir)
+    parent_dir = os.path.dirname(src_dir)
+    
+    for path in [src_dir, parent_dir]:
+        if path not in sys.path:
+            sys.path.insert(0, path)
+    
+    try:
+        from models import ParsedSentence, Operation, Condition, PatternType
+    except ImportError:
+        import src.models.parsed_sentence as ps
+        ParsedSentence = ps.ParsedSentence
+        Operation = ps.Operation
+        Condition = ps.Condition
+        PatternType = ps.PatternType
 
 
 class TokenType(Enum):
@@ -41,6 +62,13 @@ class PatternMatcher:
     
     def __init__(self):
         self._arithmetic_patterns = [
+            # Division patterns (check first to avoid conflicts)
+            (r'\bdivide\s+(\w+)\s+by\s+(\w+)', 'divide'),
+            (r'\b(\w+)\s+divided\s+by\s+(\w+)', 'divide'),
+            (r'\b(?:split)\s+(\w+)\s+(?:by|with|/)\s+(\w+)', 'divide'),
+            (r'\b(\w+)\s*/\s*(\w+)', 'divide'),
+            (r'\bcalculate\s+(\w+)\s+divided\s+by\s+(\w+)', 'divide'),
+            
             # Addition patterns
             (r'\b(?:add|plus|sum)\s+(\w+)\s+(?:and|with|\+)\s+(\w+)', 'add'),
             (r'\b(\w+)\s+plus\s+(\w+)', 'add'),
@@ -54,17 +82,11 @@ class PatternMatcher:
             (r'\b(\w+)\s*-\s*(\w+)', 'subtract'),
             (r'\bcalculate\s+(\w+)\s+minus\s+(\w+)', 'subtract'),
             
-            # Multiplication patterns
-            (r'\b(?:multiply|times)\s+(\w+)\s+(?:by|and|\*)\s+(\w+)', 'multiply'),
+            # Multiplication patterns (check after division to avoid conflicts)
+            (r'\bmultiply\s+(\w+)\s+(?:by|and|\*)\s+(\w+)', 'multiply'),
             (r'\b(\w+)\s+times\s+(\w+)', 'multiply'),
             (r'\b(\w+)\s*\*\s*(\w+)', 'multiply'),
             (r'\bcalculate\s+(\w+)\s+times\s+(\w+)', 'multiply'),
-            
-            # Division patterns
-            (r'\b(?:divide|split)\s+(\w+)\s+(?:by|with|/)\s+(\w+)', 'divide'),
-            (r'\b(\w+)\s+divided\s+by\s+(\w+)', 'divide'),
-            (r'\b(\w+)\s*/\s*(\w+)', 'divide'),
-            (r'\bcalculate\s+(\w+)\s+divided\s+by\s+(\w+)', 'divide'),
         ]
         
         self._assignment_patterns = [
@@ -76,22 +98,31 @@ class PatternMatcher:
         
         self._conditional_patterns = [
             (r'\bif\s+(.+?)\s+then\s+(.+?)(?:\s+else\s+(.+))?', 'conditional'),
+            (r'\bwhen\s+(.+?)\s+then\s+(.+)', 'conditional'),
             (r'\bwhen\s+(.+?)\s+do\s+(.+)', 'conditional'),
             (r'\bunless\s+(.+?)\s+then\s+(.+)', 'conditional'),
         ]
         
         self._loop_patterns = [
             (r'\brepeat\s+(\d+)\s+times?\s*:?\s*(.+)?', 'repeat'),
+            (r'\bloop\s+through\s+(\w+)', 'loop_through'),
+            (r'\bloop\s+(.+)', 'loop'),
             (r'\bfor\s+each\s+(\w+)\s+in\s+(\w+)\s*:?\s*(.+)?', 'for_each'),
             (r'\bwhile\s+(.+?)\s*:?\s*(.+)?', 'while'),
         ]
         
         self._data_operation_patterns = [
-            (r'\bcreate\s+(?:a\s+)?list\s+(?:with\s+)?(.+)', 'create_list'),
-            (r'\bcreate\s+(?:a\s+)?(?:dictionary|dict)\s+(?:with\s+)?(.+)', 'create_dict'),
-            (r'\badd\s+(.+?)\s+to\s+(?:list\s+)?(\w+)', 'append_list'),
-            (r'\bremove\s+(.+?)\s+from\s+(?:list\s+)?(\w+)', 'remove_list'),
-            (r'\bget\s+(.+?)\s+from\s+(\w+)', 'get_item'),
+            (r'\bcreate\s+(?:a\s+)?list(?:\s+with\s+(.+))?', 'create_list'),
+            (r'\bcreate\s+list(?:\s+with\s+(.+))?', 'create_list'),  # Handle "create list" without "a"
+            (r'\bmake\s+(?:a\s+)?list', 'create_list'),
+            (r'\bnew\s+list', 'create_list'),
+            (r'\bcreate\s+(?:a\s+)?(?:dictionary|dict)(?:\s+with\s+(.+))?', 'create_dict'),
+            (r'\bcreate\s+(?:dictionary|dict)(?:\s+with\s+(.+))?', 'create_dict'),  # Handle without "a"
+            (r'\bmake\s+(?:a\s+)?(?:dictionary|dict)', 'create_dict'),
+            (r'\bnew\s+(?:dictionary|dict)', 'create_dict'),
+            (r'\badd\s+(.+?)\s+(?:to|from)\s+(?:list\s+)?(\w+)', 'append_list'),
+            (r'\bremove\s+(.+?)\s+(?:from|to)\s+(?:list\s+)?(\w+)', 'remove_list'),
+            (r'\bget\s+(.+?)\s+from\s+(?:list\s+)?(\w+)', 'get_item'),
         ]
     
     def match_arithmetic(self, text: str) -> Optional[Tuple[str, List[str]]]:
@@ -113,7 +144,7 @@ class PatternMatcher:
     def match_conditional(self, text: str) -> Optional[Tuple[str, List[str]]]:
         """Match conditional patterns in text"""
         for pattern, operation in self._conditional_patterns:
-            match = re.search(pattern, text, re.IGNORECASE)
+            match = re.search(pattern, text, re.IGNORECASE | re.DOTALL)
             if match:
                 return operation, list(match.groups())
         return None
@@ -121,7 +152,7 @@ class PatternMatcher:
     def match_loop(self, text: str) -> Optional[Tuple[str, List[str]]]:
         """Match loop patterns in text"""
         for pattern, operation in self._loop_patterns:
-            match = re.search(pattern, text, re.IGNORECASE)
+            match = re.search(pattern, text, re.IGNORECASE | re.DOTALL)
             if match:
                 return operation, list(match.groups())
         return None
@@ -129,7 +160,7 @@ class PatternMatcher:
     def match_data_operation(self, text: str) -> Optional[Tuple[str, List[str]]]:
         """Match data operation patterns in text"""
         for pattern, operation in self._data_operation_patterns:
-            match = re.search(pattern, text, re.IGNORECASE)
+            match = re.search(pattern, text, re.IGNORECASE | re.DOTALL)
             if match:
                 return operation, list(match.groups())
         return None
@@ -224,13 +255,13 @@ class InputParser:
         if self.pattern_matcher.match_loop(sentence_lower):
             return PatternType.LOOP
         
+        # Check for data operation patterns before assignment (to handle "add X to list Y")
+        if self.pattern_matcher.match_data_operation(sentence_lower):
+            return PatternType.DATA_OPERATION
+        
         # Check for assignment patterns
         if self.pattern_matcher.match_assignment(sentence_lower):
             return PatternType.ASSIGNMENT
-        
-        # Check for data operation patterns
-        if self.pattern_matcher.match_data_operation(sentence_lower):
-            return PatternType.DATA_OPERATION
         
         # Check for arithmetic patterns last (they have broad patterns)
         if self.pattern_matcher.match_arithmetic(sentence_lower):
@@ -327,12 +358,19 @@ class InputParser:
         if match_result:
             operation_type, parts = match_result
             
-            if operation_type == 'create_list':
-                items = parts[0] if parts else ""
+            if operation_type in ['create_list', 'create_dict']:
+                # Handle cases where parts might be [None] or empty
+                items = ""
+                if parts and parts[0] is not None:
+                    items = parts[0].strip()
+                
+                data_type = 'list' if operation_type == 'create_list' else 'dict'
+                result_var = 'new_list' if data_type == 'list' else 'new_dict'
+                
                 operation = Operation(
                     operation_type="create",
-                    operands=[items],
-                    result_variable="new_list"
+                    operands=[items] if items else [],
+                    result_variable=result_var
                 )
                 operations.append(operation)
             
