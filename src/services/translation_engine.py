@@ -53,6 +53,138 @@ class TranslationWarning:
     suggestion: Optional[str] = None
 
 
+class ErrorHandler:
+    """Comprehensive error handling for translation engine"""
+    
+    @staticmethod
+    def get_input_examples() -> Dict[str, List[str]]:
+        """Get examples of valid input patterns (Requirement 5.5)"""
+        return {
+            "Arithmetic Operations": [
+                "add 5 and 3",
+                "multiply x by 2", 
+                "divide 10 by 2",
+                "subtract 3 from 8"
+            ],
+            "Variable Assignment": [
+                "set x to 10",
+                "create variable name with value hello",
+                "assign 42 to answer"
+            ],
+            "Conditional Statements": [
+                "if x greater than 5 then print yes",
+                "when count equals 0 do print empty",
+                "if temperature less than 32 then print freezing else print not freezing"
+            ],
+            "Data Operations": [
+                "create list with 1, 2, 3",
+                "add item to my_list",
+                "create dictionary with name John and age 25"
+            ],
+            "Loop Operations": [
+                "repeat 5 times print hello",
+                "for each item in numbers print item",
+                "while x less than 10 increment x"
+            ]
+        }
+    
+    @staticmethod
+    def generate_informative_error(error_type: str, original_input: str, specific_issue: str = None) -> str:
+        """Generate informative error messages (Requirement 5.1)"""
+        examples = ErrorHandler.get_input_examples()
+        
+        if error_type == "empty_input":
+            return ("Input cannot be empty. Please enter an English instruction to translate.\n\n"
+                   "Examples:\n"
+                   "  • add 5 and 3\n"
+                   "  • set x to 10\n"
+                   "  • create list with 1, 2, 3")
+        
+        elif error_type == "too_short":
+            return ("Input is too short to be meaningful. Please provide a complete instruction.\n\n"
+                   "Examples:\n"
+                   "  • add 5 and 3\n"
+                   "  • multiply x by 2\n"
+                   "  • set x to 10\n"
+                   "  • if x greater than 5 then print yes")
+        
+        elif error_type == "unrecognized_pattern":
+            message = "Unable to recognize a translatable pattern in your input."
+            if specific_issue:
+                message += f" Issue: {specific_issue}"
+            
+            message += "\n\nSupported patterns and examples:"
+            for category, pattern_examples in examples.items():
+                message += f"\n\n{category}:"
+                for example in pattern_examples[:2]:  # Show first 2 examples
+                    message += f"\n  • {example}"
+            
+            return message
+        
+        elif error_type == "parsing_failed":
+            message = f"Failed to parse your input: {specific_issue or 'Unknown parsing error'}"
+            message += "\n\nPlease check that your instruction follows one of these patterns:"
+            
+            # Show relevant examples based on input content
+            relevant_examples = ErrorHandler._get_relevant_examples(original_input, examples)
+            for category, pattern_examples in relevant_examples.items():
+                message += f"\n\n{category}:"
+                for example in pattern_examples:
+                    message += f"\n  • {example}"
+            
+            return message
+        
+        elif error_type == "code_generation_failed":
+            return (f"Failed to generate Python code: {specific_issue or 'Unknown generation error'}\n\n"
+                   "This might be due to ambiguous or incomplete instructions. "
+                   "Try being more specific about what you want to accomplish.")
+        
+        elif error_type == "unsafe_content":
+            return ("Input contains potentially unsafe content that cannot be translated.\n\n"
+                   "Please avoid using Python-specific keywords or system commands. "
+                   "Focus on basic operations like arithmetic, assignments, and data manipulation.")
+        
+        else:
+            return f"Translation error: {specific_issue or 'Unknown error occurred'}"
+    
+    @staticmethod
+    def _get_relevant_examples(input_text: str, all_examples: Dict[str, List[str]]) -> Dict[str, List[str]]:
+        """Get examples most relevant to the input text"""
+        input_lower = input_text.lower()
+        relevant = {}
+        
+        # Check for arithmetic keywords
+        arithmetic_keywords = ['add', 'plus', 'sum', 'multiply', 'times', 'divide', 'subtract', 'minus', 'calculate']
+        if any(keyword in input_lower for keyword in arithmetic_keywords):
+            relevant["Arithmetic Operations"] = all_examples["Arithmetic Operations"]
+        
+        # Check for assignment keywords  
+        assignment_keywords = ['set', 'create', 'assign', 'variable', 'value']
+        if any(keyword in input_lower for keyword in assignment_keywords):
+            relevant["Variable Assignment"] = all_examples["Variable Assignment"]
+        
+        # Check for conditional keywords
+        conditional_keywords = ['if', 'when', 'then', 'else', 'condition']
+        if any(keyword in input_lower for keyword in conditional_keywords):
+            relevant["Conditional Statements"] = all_examples["Conditional Statements"]
+        
+        # Check for data keywords
+        data_keywords = ['list', 'array', 'dictionary', 'dict', 'data']
+        if any(keyword in input_lower for keyword in data_keywords):
+            relevant["Data Operations"] = all_examples["Data Operations"]
+        
+        # Check for loop keywords
+        loop_keywords = ['repeat', 'loop', 'for', 'while', 'each', 'times']
+        if any(keyword in input_lower for keyword in loop_keywords):
+            relevant["Loop Operations"] = all_examples["Loop Operations"]
+        
+        # If no specific keywords found, return all examples
+        if not relevant:
+            return all_examples
+        
+        return relevant
+
+
 class TranslationEngine:
     """
     Main Translation Engine that coordinates parsing and code generation
@@ -98,8 +230,9 @@ class TranslationEngine:
             try:
                 translation_result = self.code_generator.generate(parsed_sentence)
             except Exception as e:
+                error_message = ErrorHandler.generate_informative_error("code_generation_failed", english_sentence, str(e))
                 return TranslationResult.create_error(
-                    f"Code generation failed: {str(e)}",
+                    error_message,
                     english_sentence,
                     time.time() - start_time
                 )
@@ -132,50 +265,43 @@ class TranslationEngine:
         """
         Validate input sentence for translation requirements
         """
+        # Check for empty input
+        if not sentence or not sentence.strip():
+            return False, ErrorHandler.generate_informative_error("empty_input", sentence)
+        
         # Use the input parser's validation
         is_valid, error_message = self.input_parser.validate_input(sentence)
         
         if not is_valid:
-            return False, error_message
+            # Determine error type based on the error message
+            if "empty" in error_message.lower():
+                return False, ErrorHandler.generate_informative_error("empty_input", sentence)
+            elif "too short" in error_message.lower():
+                return False, ErrorHandler.generate_informative_error("too_short", sentence)
+            elif "unsafe" in error_message.lower():
+                return False, ErrorHandler.generate_informative_error("unsafe_content", sentence, error_message)
+            else:
+                return False, ErrorHandler.generate_informative_error("parsing_failed", sentence, error_message)
         
         # Additional validation specific to translation
         sentence_lower = sentence.lower().strip()
         
         # Check for minimum meaningful content
         if len(sentence_lower.split()) < 2:
-            return False, "Input must contain at least 2 words to be translatable"
+            return False, ErrorHandler.generate_informative_error("too_short", sentence)
         
         # Check for supported patterns
         pattern_type = self.input_parser.identify_pattern(sentence)
         if pattern_type == PatternType.UNKNOWN:
-            return False, self._generate_pattern_suggestion(sentence)
+            return False, ErrorHandler.generate_informative_error("unrecognized_pattern", sentence)
         
         return True, "Input is valid for translation"
     
-    def _generate_pattern_suggestion(self, sentence: str) -> str:
-        """Generate helpful suggestions for unrecognized patterns"""
-        base_message = "Unable to recognize a translatable pattern in the input."
-        
-        examples = [
-            "Arithmetic: 'add 5 and 3', 'multiply x by 2'",
-            "Assignment: 'set x to 10', 'create variable name with value hello'",
-            "Conditional: 'if x greater than 5 then print yes'",
-            "Data operations: 'create list with 1, 2, 3', 'add item to my_list'"
-        ]
-        
-        return f"{base_message} Try one of these patterns:\n" + "\n".join(f"- {ex}" for ex in examples)
+
     
     def _handle_parsing_error(self, sentence: str, error: str, start_time: float) -> TranslationResult:
         """Handle parsing errors with helpful suggestions"""
-        error_message = f"Failed to parse input: {error}"
-        
-        # Provide specific suggestions based on common parsing issues
-        if "empty" in error.lower():
-            error_message += "\nSuggestion: Please provide a non-empty English instruction."
-        elif "unsafe" in error.lower():
-            error_message += "\nSuggestion: Please avoid using Python-specific keywords or potentially dangerous content."
-        else:
-            error_message += f"\n{self._generate_pattern_suggestion(sentence)}"
+        error_message = ErrorHandler.generate_informative_error("parsing_failed", sentence, error)
         
         return TranslationResult.create_error(
             error_message,

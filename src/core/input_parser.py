@@ -92,7 +92,8 @@ class PatternMatcher:
         self._assignment_patterns = [
             (r'\bset\s+(\w+)\s+to\s+(.+)', 'assign'),
             (r'\bcreate\s+variable\s+(\w+)\s+with\s+value\s+(.+)', 'assign'),
-            (r'\b(\w+)\s*=\s*(.+)', 'assign'),
+            # More specific assignment pattern - avoid matching arithmetic expressions
+            (r'\b([a-zA-Z_]\w*)\s*=\s*([^+\-*/=<>!]+)', 'assign'),
             (r'\bassign\s+(.+)\s+to\s+(\w+)', 'assign'),
         ]
         
@@ -507,8 +508,8 @@ class InputParser:
         # Check for potentially dangerous content
         dangerous_patterns = [
             r'\bimport\s+os\b',
-            r'\bexec\s*\(',
-            r'\beval\s*\(',
+            r'\bexec\b',  # Match exec with or without parentheses
+            r'\beval\b',  # Match eval with or without parentheses
             r'\b__.*__\b',
             r'\bopen\s*\(',
         ]

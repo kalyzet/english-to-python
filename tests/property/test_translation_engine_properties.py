@@ -5,7 +5,7 @@ Property-based tests for Translation Engine functionality
 """
 
 import pytest
-from hypothesis import given, strategies as st, assume
+from hypothesis import given, strategies as st, assume, settings
 import ast
 import re
 from src.services import TranslationEngine
@@ -157,11 +157,15 @@ class TestTranslationProducesPythonCode:
         var1=st.text(
             alphabet=st.characters(whitelist_categories=('Lu', 'Ll'), whitelist_characters='_'),
             min_size=1, max_size=8
-        ).filter(lambda x: x.isidentifier() if x else False),
+        ).filter(lambda x: x.isidentifier() if x else False).filter(
+            lambda x: x.lower() not in {'add', 'subtract', 'multiply', 'divide', 'plus', 'minus', 'times', 'by', 'from', 'and', 'with'}
+        ),
         var2=st.text(
             alphabet=st.characters(whitelist_categories=('Lu', 'Ll'), whitelist_characters='_'),
             min_size=1, max_size=8
-        ).filter(lambda x: x.isidentifier() if x else False)
+        ).filter(lambda x: x.isidentifier() if x else False).filter(
+            lambda x: x.lower() not in {'add', 'subtract', 'multiply', 'divide', 'plus', 'minus', 'times', 'by', 'from', 'and', 'with'}
+        )
     )
     def test_arithmetic_instructions_produce_arithmetic_code(self, var1, var2):
         """
@@ -671,3 +675,372 @@ class TestProblematicCodeWarnings:
                 # At least some warnings should be helpful
                 assert len(warning_text) > 10, \
                     f"Warnings should be informative for '{instruction}'"
+
+
+class TestTranslationErrorDisplay:
+    """
+    **Feature: english-to-python-translator, Property 18: Translation error display**
+    **Validates: Requirements 5.2**
+    
+    Property: For any error occurring during translation, the error message should be 
+    displayed in a separate error area distinct from the output area.
+    """
+    
+    @settings(deadline=1000)  # 1 second deadline
+    @given(invalid_input=invalid_english_instructions())
+    def test_translation_errors_displayed_separately(self, invalid_input):
+        """
+        Property: Translation errors should be displayed in separate error area
+        """
+        from src.gui.application_controller import ApplicationController
+        import tkinter as tk
+        
+        # Create application controller with GUI
+        controller = ApplicationController()
+        main_window = controller.get_main_window()
+        
+        try:
+            # Property: GUI should have separate error display area
+            assert hasattr(main_window, 'error_text'), \
+                "Main window should have separate error text area"
+            assert hasattr(main_window, 'set_error_text'), \
+                "Main window should have method to set error text"
+            assert hasattr(main_window, 'display_translation_error'), \
+                "Main window should have method to display translation errors"
+            
+            # Clear any existing content
+            main_window.clear_error_text()
+            main_window.set_output_text("")
+            
+            # Simulate translation of invalid input
+            result = controller._handle_translate(invalid_input)
+            
+            # Property: Invalid input should produce failed translation result
+            if hasattr(result, 'success'):
+                assert not result.success, f"Invalid input '{invalid_input}' should produce failed translation"
+                
+                # Simulate GUI handling the error (this would normally be done by the GUI callback)
+                main_window.display_translation_error(result.error_message)
+                
+                # Property: Error should be displayed in error area, not output area
+                error_content = main_window.get_error_text()
+                output_content = main_window.get_output_text()
+                
+                assert error_content.strip(), \
+                    f"Error area should contain error message for '{invalid_input}'"
+                
+                # Property: Error message should contain the actual error
+                assert result.error_message in error_content or "TRANSLATION ERROR" in error_content, \
+                    f"Error area should contain translation error for '{invalid_input}'"
+                
+                # Property: Output area should not contain the error (separation of concerns)
+                assert result.error_message not in output_content, \
+                    f"Output area should not contain error message for '{invalid_input}'"
+            
+        finally:
+            # Clean up GUI
+            try:
+                main_window.destroy()
+            except:
+                pass
+    
+    @settings(deadline=1000)  # 1 second deadline
+    @given(
+        valid_input=valid_english_instructions(),
+        invalid_input=invalid_english_instructions()
+    )
+    def test_error_area_distinct_from_output_area(self, valid_input, invalid_input):
+        """
+        Property: Error area should be distinct from output area
+        """
+        from src.gui.application_controller import ApplicationController
+        
+        controller = ApplicationController()
+        main_window = controller.get_main_window()
+        
+        try:
+            # Property: Error and output areas should be separate widgets
+            assert main_window.error_text != main_window.output_text, \
+                "Error text area should be different widget from output text area"
+            
+            # Clear both areas
+            main_window.clear_error_text()
+            main_window.set_output_text("")
+            
+            # Test valid input first
+            valid_result = controller._handle_translate(valid_input)
+            if hasattr(valid_result, 'success') and valid_result.success:
+                main_window.set_output_text(valid_result.python_code)
+                
+                # Property: Valid translation should put code in output area
+                output_content = main_window.get_output_text()
+                assert output_content.strip(), \
+                    f"Valid input '{valid_input}' should produce output"
+                
+                # Property: Error area should remain empty for valid input
+                error_content = main_window.get_error_text()
+                assert not error_content.strip(), \
+                    f"Error area should be empty for valid input '{valid_input}'"
+            
+            # Now test invalid input
+            invalid_result = controller._handle_translate(invalid_input)
+            if hasattr(invalid_result, 'success') and not invalid_result.success:
+                main_window.display_translation_error(invalid_result.error_message)
+                
+                # Property: Invalid translation should put error in error area
+                error_content = main_window.get_error_text()
+                assert error_content.strip(), \
+                    f"Invalid input '{invalid_input}' should produce error in error area"
+                
+                # Property: Error should not contaminate output area
+                output_content = main_window.get_output_text()
+                if output_content.strip():  # If there was previous valid output
+                    assert invalid_result.error_message not in output_content, \
+                        f"Error should not appear in output area for '{invalid_input}'"
+        
+        finally:
+            # Clean up GUI
+            try:
+                main_window.destroy()
+            except:
+                pass
+    
+    @settings(deadline=1000)  # 1 second deadline
+    @given(error_message=st.text(
+        alphabet=st.characters(whitelist_categories=('Lu', 'Ll', 'Nd', 'Pc', 'Pd', 'Ps', 'Pe', 'Po'), whitelist_characters=' '),
+        min_size=10, max_size=200
+    ).filter(lambda x: x.strip() and x.isprintable()))
+    def test_error_display_formatting(self, error_message):
+        """
+        Property: Error messages should be properly formatted when displayed
+        """
+        from src.gui.application_controller import ApplicationController
+        
+        controller = ApplicationController()
+        main_window = controller.get_main_window()
+        
+        try:
+            # Property: Error display method should format errors with timestamp
+            main_window.display_translation_error(error_message)
+            
+            displayed_error = main_window.get_error_text()
+            
+            # Property: Displayed error should contain original message (accounting for whitespace normalization)
+            assert error_message.strip() in displayed_error, \
+                f"Displayed error should contain original message: {error_message.strip()}"
+            
+            # Property: Displayed error should have formatting (timestamp, label)
+            assert "TRANSLATION ERROR" in displayed_error, \
+                "Displayed error should have error type label"
+            
+            # Property: Displayed error should have timestamp format [HH:MM:SS]
+            import re
+            timestamp_pattern = r'\[\d{2}:\d{2}:\d{2}\]'
+            has_timestamp = re.search(timestamp_pattern, displayed_error)
+            assert has_timestamp, \
+                f"Displayed error should have timestamp format: {displayed_error}"
+        
+        finally:
+            # Clean up GUI
+            try:
+                main_window.destroy()
+            except:
+                pass
+    
+    @settings(deadline=1000)  # 1 second deadline
+    @given(
+        error1=st.text(min_size=5, max_size=50).filter(lambda x: x.strip()),
+        error2=st.text(min_size=5, max_size=50).filter(lambda x: x.strip())
+    )
+    def test_multiple_errors_handling(self, error1, error2):
+        """
+        Property: Multiple translation errors should be handled properly
+        """
+        assume(error1 != error2)
+        
+        from src.gui.application_controller import ApplicationController
+        
+        controller = ApplicationController()
+        main_window = controller.get_main_window()
+        
+        try:
+            # Clear error area
+            main_window.clear_error_text()
+            
+            # Display first error
+            main_window.display_translation_error(error1)
+            first_display = main_window.get_error_text()
+            
+            # Property: First error should be displayed (accounting for whitespace normalization)
+            assert error1.strip() in first_display, \
+                f"First error should be displayed: {error1.strip()}"
+            
+            # Display second error (should replace first)
+            main_window.display_translation_error(error2)
+            second_display = main_window.get_error_text()
+            
+            # Property: Second error should be displayed (accounting for whitespace normalization)
+            assert error2.strip() in second_display, \
+                f"Second error should be displayed: {error2.strip()}"
+            
+            # Property: Error area should show most recent error
+            # (Implementation may vary - could replace or append)
+            assert second_display != first_display, \
+                "Error display should change when new error is displayed"
+        
+        finally:
+            # Clean up GUI
+            try:
+                main_window.destroy()
+            except:
+                pass
+
+
+class TestExampleProvisionForUnprocessableInput:
+    """
+    **Feature: english-to-python-translator, Property 21: Example provision for unprocessable input**
+    **Validates: Requirements 5.5**
+    
+    Property: For any input that cannot be processed, the system should provide 
+    at least one example of valid input format.
+    """
+    
+    @given(unprocessable_input=st.sampled_from([
+        'hello world',
+        'random text here', 
+        'no pattern at all',
+        'just some words',
+        'xyz abc def ghi',
+        'this makes no sense',
+        'completely unrelated content',
+        'foo bar baz'
+    ]))
+    def test_unprocessable_input_provides_examples(self, unprocessable_input):
+        """
+        Property: Unprocessable input should provide at least one example of valid format
+        """
+        engine = TranslationEngine()
+        
+        result = engine.translate(unprocessable_input)
+        
+        # Property: Unprocessable input should result in failed translation
+        assert not result.success, f"Unprocessable input '{unprocessable_input}' should result in failed translation"
+        
+        # Property: Error message should provide examples
+        error_msg = result.error_message.lower()
+        
+        # Check for example indicators
+        example_indicators = ['example', 'try', 'like', 'such as', 'pattern', 'format']
+        has_example_indicators = any(indicator in error_msg for indicator in example_indicators)
+        assert has_example_indicators, \
+            f"Error message should provide examples for unprocessable input '{unprocessable_input}': {result.error_message}"
+        
+        # Property: Should contain at least one concrete example
+        # Look for patterns that indicate examples are provided
+        concrete_examples = [
+            'add', 'multiply', 'set', 'create', 'if', 'repeat', 'list', 'dictionary'
+        ]
+        has_concrete_examples = any(example in error_msg for example in concrete_examples)
+        assert has_concrete_examples, \
+            f"Error message should contain concrete examples for '{unprocessable_input}': {result.error_message}"
+    
+    @given(empty_or_short_input=st.one_of(
+        st.just(''),
+        st.just('   '),
+        st.text(min_size=1, max_size=2).filter(lambda x: x.strip())
+    ))
+    def test_empty_or_short_input_provides_examples(self, empty_or_short_input):
+        """
+        Property: Empty or too short input should provide examples of valid input
+        """
+        engine = TranslationEngine()
+        
+        result = engine.translate(empty_or_short_input)
+        
+        # Property: Empty/short input should fail
+        assert not result.success, f"Empty/short input should result in failed translation"
+        
+        # Property: Error message should provide examples
+        error_msg = result.error_message
+        
+        # Should contain example patterns
+        example_patterns = [
+            'add 5 and 3',
+            'set x to 10', 
+            'create list',
+            'if x greater than',
+            'multiply'
+        ]
+        
+        has_examples = any(pattern in error_msg for pattern in example_patterns)
+        assert has_examples, \
+            f"Error message should provide examples for empty/short input: {result.error_message}"
+    
+    @given(unsafe_input=st.sampled_from([
+        'import os and delete files',
+        'exec malicious code',
+        'eval dangerous expression', 
+        'open system files',
+        '__import__ something',
+        'exec(evil_code)'
+    ]))
+    def test_unsafe_input_provides_safe_examples(self, unsafe_input):
+        """
+        Property: Unsafe input should provide examples of safe operations
+        """
+        engine = TranslationEngine()
+        
+        result = engine.translate(unsafe_input)
+        
+        # Property: Unsafe input should fail
+        assert not result.success, f"Unsafe input '{unsafe_input}' should result in failed translation"
+        
+        # Property: Error message should mention safety and provide safe examples
+        error_msg = result.error_message.lower()
+        
+        # Should mention safety concerns
+        safety_keywords = ['unsafe', 'dangerous', 'avoid', 'safe', 'secure']
+        mentions_safety = any(keyword in error_msg for keyword in safety_keywords)
+        assert mentions_safety, \
+            f"Error message should mention safety for unsafe input '{unsafe_input}': {result.error_message}"
+        
+        # Should provide safe alternatives
+        safe_examples = ['add', 'set', 'create', 'calculate', 'list', 'basic']
+        has_safe_examples = any(example in error_msg for example in safe_examples)
+        assert has_safe_examples, \
+            f"Error message should provide safe examples for unsafe input '{unsafe_input}': {result.error_message}"
+    
+    @given(unprocessable_input=st.sampled_from([
+        'random words here',
+        'no meaning at all', 
+        'just text without purpose',
+        'completely unrelated stuff'
+    ]))
+    def test_examples_cover_multiple_categories(self, unprocessable_input):
+        """
+        Property: Examples should cover multiple categories of operations
+        """
+        engine = TranslationEngine()
+        
+        result = engine.translate(unprocessable_input)
+        
+        if not result.success:
+            error_msg = result.error_message.lower()
+            
+            # Property: Error message should provide examples from multiple categories
+            categories = {
+                'arithmetic': ['add', 'multiply', 'divide', 'subtract', 'plus', 'times'],
+                'assignment': ['set', 'create variable', 'assign'],
+                'conditional': ['if', 'when', 'then'],
+                'data': ['list', 'dictionary', 'array'],
+                'loop': ['repeat', 'for each', 'while']
+            }
+            
+            categories_covered = 0
+            for category, keywords in categories.items():
+                if any(keyword in error_msg for keyword in keywords):
+                    categories_covered += 1
+            
+            # Property: Should cover at least 2 different categories of operations
+            assert categories_covered >= 2, \
+                f"Error message should cover multiple operation categories for '{unprocessable_input}': {result.error_message}"
