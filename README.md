@@ -71,7 +71,7 @@ pytest --cov=src --cov-report=html
 ```
 english-to-python-translator/
 ├── src/
-│   ├── models/         # Data models
+│   ├── models/        # Data models
 │   ├── core/          # Core components (Parser, Generator)
 │   ├── services/      # Service layer (Translation, Execution)
 │   └── gui/           # GUI components
@@ -81,7 +81,7 @@ english-to-python-translator/
 │   └── integration/   # Integration tests
 ├── main.py            # Application entry point
 ├── requirements.txt   # Dependencies
-└── README.md         # This file
+└── README.md          # This file
 ```
 
 ## Development Status
