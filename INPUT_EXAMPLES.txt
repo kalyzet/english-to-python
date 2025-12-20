@@ -1,0 +1,67 @@
+📝 CONTOH INPUT UNTUK ENGLISH TO PYTHON TRANSLATOR
+
+=== CARA MENGGUNAKAN ===
+1. Jalankan: python main.py
+2. Copy-paste salah satu contoh input di bawah ini
+3. Klik "Translate" 
+4. Klik "Run Code"
+
+=== 📦 ASSIGNMENT VARIABEL ===
+set age to 25
+set name to John
+set score to 85.5
+set temperature to 30
+set status to active
+
+=== 🔢 OPERASI ARITMATIKA ===
+add 10 and 5
+subtract 3 from 15
+multiply 6 by 7
+divide 20 by 4
+calculate 25 plus 30
+
+=== 🔀 CONDITIONAL STATEMENTS (BARU DIPERBAIKI!) ===
+if age greater than 18 then print adult
+if score less than 60 then print fail
+when temperature greater than 30 do print hot
+if age greater than 18 then print adult else print minor
+if score greater than 80 then print excellent else print good
+
+=== 🚀 WORKFLOW LENGKAP (COBA SATU PER SATU) ===
+
+--- Scenario 1: Sistem Penilaian ---
+set score to 85
+if score greater than 80 then print excellent else print good
+if score greater than 60 then print pass else print fail
+
+--- Scenario 2: Sistem Usia ---
+set age to 20
+if age greater than 18 then print adult else print minor
+when age equals 20 do print twenty_years_old
+
+--- Scenario 3: Sistem Suhu ---
+set temperature to 35
+if temperature greater than 30 then print hot else print cool
+when temperature greater than 40 do print very_hot
+
+=== ✨ FITUR BARU YANG SUDAH DIPERBAIKI ===
+✅ Print statements: print adult → print(adult)
+✅ Else clause: if...then...else sekarang bekerja
+✅ Multiple patterns: if-then, when-do, when-then
+✅ String detection: print pass → print("pass")
+
+=== ⚠️ FORMAT YANG BENAR ===
+✅ if age greater than 18 then print adult
+✅ when count equals 0 do print empty  
+✅ set variable to value
+
+❌ if age greater than 18 (tidak ada "then")
+❌ when count equals 0 (tidak ada "do")
+❌ variable = value (gunakan "set")
+
+=== 🎯 OPERATOR YANG DIDUKUNG ===
+greater than → >
+less than → <
+equals → ==
+and → and
+or → or

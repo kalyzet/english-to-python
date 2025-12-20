@@ -98,10 +98,13 @@ class PatternMatcher:
         ]
         
         self._conditional_patterns = [
-            (r'\bif\s+(.+?)\s+then\s+(.+?)(?:\s+else\s+(.+))?', 'conditional'),
-            (r'\bwhen\s+(.+?)\s+then\s+(.+)', 'conditional'),
-            (r'\bwhen\s+(.+?)\s+do\s+(.+)', 'conditional'),
-            (r'\bunless\s+(.+?)\s+then\s+(.+)', 'conditional'),
+            # Pattern with else clause - must come first
+            (r'\bif\s+(.+?)\s+then\s+(.+?)\s+else\s+(.+)$', 'conditional'),
+            # Pattern without else clause
+            (r'\bif\s+(.+?)\s+then\s+(.+)$', 'conditional'),
+            (r'\bwhen\s+(.+?)\s+then\s+(.+)$', 'conditional'),
+            (r'\bwhen\s+(.+?)\s+do\s+(.+)$', 'conditional'),
+            (r'\bunless\s+(.+?)\s+then\s+(.+)$', 'conditional'),
         ]
         
         self._loop_patterns = [
@@ -270,11 +273,16 @@ class InputParser:
         
         return PatternType.UNKNOWN
     
-    def extract_variables(self, sentence: str) -> Dict[str, Any]:
+    def extract_variables(self, sentence: str, pattern_type: PatternType = None) -> Dict[str, Any]:
         """
         Extract variable names and values from the sentence
         """
         variables = {}
+        
+        # For assignment patterns, don't extract any variables
+        # since the assignment operation will handle everything
+        if pattern_type == PatternType.ASSIGNMENT:
+            return variables
         
         # Extract numbers as potential variable values
         numbers = re.findall(r'\b\d+(?:\.\d+)?\b', sentence)
@@ -423,6 +431,34 @@ class InputParser:
         
         return variables
     
+    def _format_action(self, action_text: str) -> str:
+        """Format action text to valid Python code"""
+        action = action_text.strip()
+        
+        # Handle print statements
+        if action.lower().startswith('print '):
+            # Extract what to print
+            print_content = action[6:].strip()  # Remove 'print '
+            
+            # Handle special keywords that should be treated as strings
+            if print_content.lower() in ['pass', 'fail', 'true', 'false', 'none']:
+                return f'print("{print_content}")'
+            # Check if it's a variable or a string literal
+            elif print_content.isidentifier():
+                # It's a variable
+                return f'print({print_content})'
+            else:
+                # Treat as string literal
+                return f'print("{print_content}")'
+        
+        # Handle other common actions
+        elif action.lower().startswith('set '):
+            # Handle assignment within conditional
+            return action  # Let assignment parser handle this
+        
+        # Default: return as comment if we can't parse it
+        return f'# {action}'
+    
     def parse_sentence(self, sentence: str) -> ParsedSentence:
         """
         Main method to parse an English sentence into a ParsedSentence object
@@ -437,7 +473,7 @@ class InputParser:
         )
         
         # Extract variables
-        variables = self.extract_variables(sentence)
+        variables = self.extract_variables(sentence, parsed.pattern_type)
         for name, value in variables.items():
             parsed.add_variable(name, value)
         
@@ -461,6 +497,20 @@ class InputParser:
             conditions = self._parse_conditions(sentence)
             for cond in conditions:
                 parsed.add_condition(cond)
+            
+            # Extract action parts from conditional statement
+            match_result = self.pattern_matcher.match_conditional(sentence)
+            if match_result:
+                condition_type, parts = match_result
+                if len(parts) >= 2 and parts[1]:
+                    # Extract then_block action
+                    then_action = parts[1].strip()
+                    parsed.metadata['then_block'] = self._format_action(then_action)
+                
+                if len(parts) >= 3 and parts[2]:
+                    # Extract else_block action
+                    else_action = parts[2].strip()
+                    parsed.metadata['else_block'] = self._format_action(else_action)
         
         # Add metadata
         parsed.metadata['tokens'] = len(self.tokenize_input(sentence))
