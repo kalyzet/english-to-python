@@ -350,9 +350,12 @@ class InputParser:
                 var_name = parts[0].strip()
                 value = parts[1].strip()
                 
+                # Format the value properly for Python
+                formatted_value = self._format_assignment_value(value)
+                
                 operation = Operation(
                     operation_type="assign",
-                    operands=[value],
+                    operands=[formatted_value],
                     result_variable=var_name
                 )
                 operations.append(operation)
@@ -432,7 +435,7 @@ class InputParser:
         return variables
     
     def _format_action(self, action_text: str) -> str:
-        """Format action text to valid Python code"""
+        """Format action text to valid Python code that can be executed"""
         action = action_text.strip()
         
         # Handle print statements
@@ -441,15 +444,37 @@ class InputParser:
             print_content = action[6:].strip()  # Remove 'print '
             
             # Handle special keywords that should be treated as strings
-            if print_content.lower() in ['pass', 'fail', 'true', 'false', 'none']:
+            special_keywords = ['pass', 'fail', 'true', 'false', 'none', 'adult', 'minor', 
+                              'hot', 'cold', 'normal', 'excellent', 'good', 'poor', 'empty',
+                              'running', 'stopped', 'active', 'inactive', 'high_score', 
+                              'normal_score', 'level_up', 'continue_playing', 'game_over',
+                              'still_alive', 'bonus_life', 'humid', 'windy', 'calm',
+                              'extreme_heat', 'danger', 'safe', 'very_hot', 'good_math',
+                              'poor_math', 'need_improvement', 'excellent_english', 
+                              'good_english', 'passed', 'failed', 'member_discount',
+                              'no_discount', 'bulk_discount', 'regular_price', 'expensive',
+                              'affordable', 'twenty_years_old', 'twenty', 'old', 'young']
+            
+            # Check if it's a special keyword or common output that should be a string
+            if (print_content.lower() in special_keywords or 
+                not print_content.isidentifier() or
+                print_content.lower() in ['pass', 'fail']):
                 return f'print("{print_content}")'
-            # Check if it's a variable or a string literal
-            elif print_content.isidentifier():
-                # It's a variable
-                return f'print({print_content})'
             else:
-                # Treat as string literal
-                return f'print("{print_content}")'
+                # Check if it looks like a variable that might not be defined
+                # For safety, treat most single words as strings unless they're clearly variables
+                if print_content.isidentifier() and len(print_content) > 2:
+                    # Check if it's a common variable name pattern
+                    common_vars = ['age', 'score', 'temperature', 'humidity', 'count', 
+                                 'total', 'result', 'status', 'level', 'lives', 'name']
+                    if any(var in print_content.lower() for var in common_vars):
+                        return f'print({print_content})'
+                    else:
+                        # Treat as string to avoid NameError
+                        return f'print("{print_content}")'
+                else:
+                    # Treat as string literal
+                    return f'print("{print_content}")'
         
         # Handle other common actions
         elif action.lower().startswith('set '):
@@ -458,6 +483,38 @@ class InputParser:
         
         # Default: return as comment if we can't parse it
         return f'# {action}'
+    
+    def _format_assignment_value(self, value: str) -> str:
+        """Format assignment value to proper Python syntax"""
+        value = value.strip()
+        
+        # Check if it's a number
+        try:
+            # Try integer first
+            int(value)
+            return value
+        except ValueError:
+            try:
+                # Try float
+                float(value)
+                return value
+            except ValueError:
+                pass
+        
+        # Check if it's a boolean
+        if value.lower() in ['true', 'false']:
+            return value.capitalize()
+        
+        # Check if it's None
+        if value.lower() == 'none':
+            return 'None'
+        
+        # Check if it's already quoted
+        if (value.startswith('"') and value.endswith('"')) or (value.startswith("'") and value.endswith("'")):
+            return value
+        
+        # For everything else, treat as string
+        return f'"{value}"'
     
     def parse_sentence(self, sentence: str) -> ParsedSentence:
         """

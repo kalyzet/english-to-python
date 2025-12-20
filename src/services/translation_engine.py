@@ -215,7 +215,14 @@ class TranslationEngine:
                     time.time() - start_time
                 )
             
-            # Parse the English sentence
+            # Check if input contains multiple statements
+            statements = self._split_multiple_statements(cleaned_input)
+            
+            if len(statements) > 1:
+                # Handle multiple statements
+                return self._translate_multiple_statements(statements, english_sentence, start_time)
+            
+            # Parse the English sentence (single statement)
             try:
                 parsed_sentence = self.input_parser.parse_sentence(cleaned_input)
             except Exception as e:
@@ -454,3 +461,111 @@ class TranslationEngine:
                 "variable_analysis"
             ]
         }
+    
+    def _split_multiple_statements(self, input_text: str) -> List[str]:
+        """Split input text into individual statements"""
+        import re
+        
+        # First, split by newlines
+        lines = input_text.strip().split('\n')
+        statements = []
+        
+        for line in lines:
+            line = line.strip()
+            if line:  # Skip empty lines
+                statements.append(line)
+        
+        # If we have multiple lines, return them
+        if len(statements) > 1:
+            return statements
+        
+        # If single line, try to detect multiple statements
+        if len(statements) == 1:
+            single_line = statements[0]
+            
+            # Look for patterns that indicate statement boundaries
+            # More specific patterns to avoid false positives
+            statement_patterns = [
+                r'(?<=\w)\s*(?=set\s+\w+\s+to\s+)',           # After word, before "set var to"
+                r'(?<=\w)\s*(?=if\s+\w+\s+\w+\s+than\s+)',    # After word, before "if var op than"
+                r'(?<=\w)\s*(?=when\s+\w+\s+\w+\s+)',         # After word, before "when var op"
+                r'(?<=\w)\s*(?=create\s+)',                   # After word, before "create"
+                r'(?<=\w)\s*(?=add\s+\w+\s+and\s+)',          # After word, before "add X and Y"
+                r'(?<=\w)\s*(?=multiply\s+\w+\s+by\s+)',      # After word, before "multiply X by Y"
+                r'(?<=\w)\s*(?=subtract\s+\w+\s+from\s+)',    # After word, before "subtract X from Y"
+                r'(?<=\w)\s*(?=divide\s+\w+\s+by\s+)',        # After word, before "divide X by Y"
+            ]
+            
+            # Try each pattern to split
+            for pattern in statement_patterns:
+                parts = re.split(pattern, single_line)
+                if len(parts) > 1:
+                    # Clean up parts
+                    cleaned_parts = [part.strip() for part in parts if part.strip()]
+                    if len(cleaned_parts) > 1:
+                        return cleaned_parts
+            
+            # If no pattern worked, try a more aggressive approach
+            # Look for common statement beginnings without word boundaries
+            aggressive_patterns = [
+                r'(set\s+\w+\s+to\s+[^s]*?)(?=set\s+)',
+                r'(if\s+[^i]*?)(?=if\s+)',
+                r'(when\s+[^w]*?)(?=when\s+)',
+                r'(set\s+[^s]*?)(?=if\s+)',
+                r'(set\s+[^s]*?)(?=when\s+)',
+            ]
+            
+            for pattern in aggressive_patterns:
+                matches = re.findall(pattern, single_line)
+                if matches:
+                    # Find what's left after all matches
+                    remaining = single_line
+                    for match in matches:
+                        remaining = remaining.replace(match, '', 1)
+                    
+                    result = matches + [remaining.strip()] if remaining.strip() else matches
+                    if len(result) > 1:
+                        return result
+        
+        # Return original as single statement
+        return [input_text.strip()]
+    
+    def _translate_multiple_statements(self, statements: List[str], original_input: str, start_time: float) -> TranslationResult:
+        """Translate multiple statements and combine the results"""
+        all_code = []
+        all_warnings = []
+        
+        for i, statement in enumerate(statements):
+            # Translate each statement individually
+            result = self.translate(statement)
+            
+            if result.success:
+                all_code.append(result.python_code)
+                all_warnings.extend(result.warnings)
+            else:
+                # If any statement fails, return error with context
+                error_msg = f"Error in statement {i+1} ('{statement}'): {result.error_message}"
+                return TranslationResult.create_error(
+                    error_msg,
+                    original_input,
+                    time.time() - start_time
+                )
+        
+        # Combine all code
+        combined_code = '\n'.join(all_code)
+        
+        # Create successful result
+        result = TranslationResult.create_success(
+            combined_code,
+            original_input,
+            time.time() - start_time
+        )
+        
+        # Add all warnings
+        for warning in all_warnings:
+            result.add_warning(warning)
+        
+        # Add info about multiple statements
+        result.add_warning(f"[INFO] Processed {len(statements)} statements")
+        
+        return result
