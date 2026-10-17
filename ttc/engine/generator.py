@@ -5,8 +5,8 @@ Code Generator component for English to Python Translator
 import ast
 from typing import Dict, List, Optional, Any, Tuple
 
-from ..models.parsed_sentence import ParsedSentence, Operation, Condition, PatternType
-from ..models.translation_result import TranslationResult
+from .parsed_sentence import ParsedSentence, Operation, Condition, PatternType
+from .translation_result import TranslationResult
 
 
 class CodeGenerator:

@@ -8,9 +8,9 @@ import pytest
 from hypothesis import given, strategies as st, assume, settings
 from typing import List, Dict, Any
 
-from src.core.code_generator import CodeGenerator
-from src.models.parsed_sentence import ParsedSentence, Operation, Condition, PatternType
-from src.models.translation_result import TranslationResult
+from ttc.engine.generator import CodeGenerator
+from ttc.engine.parsed_sentence import ParsedSentence, Operation, Condition, PatternType
+from ttc.engine.translation_result import TranslationResult
 
 
 # Helper strategies for generating test data

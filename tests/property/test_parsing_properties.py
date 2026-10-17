@@ -6,8 +6,8 @@ Property-based tests for parsing functionality
 
 import pytest
 from hypothesis import given, strategies as st, assume
-from src.core import InputParser, PatternMatcher
-from src.models import PatternType
+from ttc.engine import InputParser, PatternMatcher
+from ttc.engine import PatternType
 
 
 # Hypothesis strategies for generating test data

@@ -7,41 +7,10 @@ import time
 from typing import List, Optional, Dict, Any, Tuple
 from dataclasses import dataclass
 
-try:
-    from ..core.input_parser import InputParser
-    from ..core.code_generator import CodeGenerator
-    from ..models.parsed_sentence import ParsedSentence, PatternType
-    from ..models.translation_result import TranslationResult
-except (ImportError, ValueError):
-    # Fallback for when running tests or direct imports
-    import sys
-    import os
-    # Add both src and parent directory to path
-    current_dir = os.path.dirname(os.path.abspath(__file__))
-    src_dir = os.path.dirname(current_dir)
-    parent_dir = os.path.dirname(src_dir)
-    
-    for path in [src_dir, parent_dir]:
-        if path not in sys.path:
-            sys.path.insert(0, path)
-    
-    try:
-        from core.input_parser import InputParser
-        from core.code_generator import CodeGenerator
-        from models.parsed_sentence import ParsedSentence, PatternType
-        from models.translation_result import TranslationResult
-    except ImportError:
-        # Last resort - try absolute imports
-        import src.core.input_parser as ip
-        import src.core.code_generator as cg
-        import src.models.parsed_sentence as ps
-        import src.models.translation_result as tr
-        
-        InputParser = ip.InputParser
-        CodeGenerator = cg.CodeGenerator
-        ParsedSentence = ps.ParsedSentence
-        PatternType = ps.PatternType
-        TranslationResult = tr.TranslationResult
+from .parser import InputParser
+from .generator import CodeGenerator
+from .parsed_sentence import ParsedSentence, PatternType
+from .translation_result import TranslationResult
 
 
 @dataclass

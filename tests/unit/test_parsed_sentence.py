@@ -3,7 +3,7 @@ Unit tests for ParsedSentence data model
 """
 
 import pytest
-from src.models import ParsedSentence, Operation, Condition, PatternType
+from ttc.engine import ParsedSentence, Operation, Condition, PatternType
 
 
 class TestOperation:

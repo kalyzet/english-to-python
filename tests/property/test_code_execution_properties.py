@@ -8,8 +8,8 @@ import pytest
 from hypothesis import given, strategies as st, assume
 import ast
 import time
-from src.services import CodeExecutionService, ExecutionConfig
-from src.models.translation_result import ExecutionResult
+from ttc import CodeExecutionService, ExecutionConfig
+from ttc.engine.translation_result import ExecutionResult
 
 
 # Hypothesis strategies for generating test data

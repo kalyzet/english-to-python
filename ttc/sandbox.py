@@ -17,7 +17,7 @@ from typing import Optional, Dict, Any, Callable
 from contextlib import contextmanager, redirect_stdout, redirect_stderr
 from dataclasses import dataclass
 
-from src.models.translation_result import ExecutionResult
+from .engine.translation_result import ExecutionResult
 
 
 @dataclass

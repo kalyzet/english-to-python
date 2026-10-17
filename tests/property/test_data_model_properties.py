@@ -6,7 +6,7 @@ Property-based tests for data model validation
 
 import pytest
 from hypothesis import given, strategies as st, assume
-from src.models import ParsedSentence, Operation, Condition, PatternType, TranslationResult, ExecutionResult
+from ttc.engine import ParsedSentence, Operation, Condition, PatternType, TranslationResult, ExecutionResult
 
 
 # Hypothesis strategies for generating test data

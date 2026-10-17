@@ -3,8 +3,8 @@ Unit tests for Input Parser component
 """
 
 import pytest
-from src.core import InputParser, PatternMatcher, Token, TokenType
-from src.models import PatternType
+from ttc.engine import InputParser, PatternMatcher, Token, TokenType
+from ttc.engine import PatternType
 
 
 class TestPatternMatcher:

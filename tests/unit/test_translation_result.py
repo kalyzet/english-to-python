@@ -4,7 +4,7 @@ Unit tests for TranslationResult and ExecutionResult data models
 
 import pytest
 from datetime import datetime
-from src.models import TranslationResult, ExecutionResult
+from ttc.engine import TranslationResult, ExecutionResult
 
 
 class TestExecutionResult:

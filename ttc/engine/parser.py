@@ -4,33 +4,11 @@ Menganalisis dan memparse kalimat bahasa Inggris menjadi struktur data
 """
 
 import re
-import nltk
 from typing import Dict, List, Optional, Tuple, Any
 from dataclasses import dataclass
 from enum import Enum
 
-try:
-    from ..models import ParsedSentence, Operation, Condition, PatternType
-except (ImportError, ValueError):
-    # Fallback for when running tests or direct imports
-    import sys
-    import os
-    current_dir = os.path.dirname(os.path.abspath(__file__))
-    src_dir = os.path.dirname(current_dir)
-    parent_dir = os.path.dirname(src_dir)
-    
-    for path in [src_dir, parent_dir]:
-        if path not in sys.path:
-            sys.path.insert(0, path)
-    
-    try:
-        from models import ParsedSentence, Operation, Condition, PatternType
-    except ImportError:
-        import src.models.parsed_sentence as ps
-        ParsedSentence = ps.ParsedSentence
-        Operation = ps.Operation
-        Condition = ps.Condition
-        PatternType = ps.PatternType
+from .parsed_sentence import ParsedSentence, Operation, Condition, PatternType
 
 
 class TokenType(Enum):
@@ -177,25 +155,6 @@ class InputParser:
     
     def __init__(self):
         self.pattern_matcher = PatternMatcher()
-        self._ensure_nltk_data()
-    
-    def _ensure_nltk_data(self):
-        """Ensure required NLTK data is available"""
-        try:
-            nltk.data.find('tokenizers/punkt')
-        except LookupError:
-            try:
-                nltk.download('punkt', quiet=True)
-            except Exception:
-                pass  # Continue without NLTK if download fails
-        
-        try:
-            nltk.data.find('taggers/averaged_perceptron_tagger')
-        except LookupError:
-            try:
-                nltk.download('averaged_perceptron_tagger', quiet=True)
-            except Exception:
-                pass  # Continue without NLTK if download fails
     
     def tokenize_input(self, sentence: str) -> List[Token]:
         """
