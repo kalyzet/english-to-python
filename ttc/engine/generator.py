@@ -3,10 +3,12 @@ Code Generator component for English to Python Translator
 """
 
 import ast
+import re
 from typing import Dict, List, Optional, Any, Tuple
 
 from .parsed_sentence import ParsedSentence, Operation, Condition, PatternType
 from .translation_result import TranslationResult
+from .literals import format_literal, format_index
 
 
 class CodeGenerator:
@@ -25,11 +27,12 @@ class CodeGenerator:
         'loop_while': 'while {condition}:\n    {body}',
         'list_create': '{variable} = [{items}]',
         'list_append': '{list_var}.append({item})',
+        'list_remove': '{list_var}.remove({item})',
         'dict_create': '{variable} = {{{items}}}',
         'string_create': '{variable} = "{value}"',
     }
     
-    def __init__(self):
+    def __init__(self) -> None:
         self.warnings: List[str] = []
     
     def generate(self, parsed_sentence: ParsedSentence) -> TranslationResult:
@@ -171,7 +174,7 @@ class CodeGenerator:
                 data_type = parsed_sentence.metadata.get('data_type', 'list')
                 
                 if data_type == 'list':
-                    items = ', '.join(operation.operands)
+                    items = ', '.join(format_literal(item) for item in operation.operands)
                     variable = operation.result_variable or 'my_list'
                     template = self.TEMPLATES['list_create']
                     code = template.format(variable=variable, items=items)
@@ -190,17 +193,30 @@ class CodeGenerator:
                 
                 code_lines.append(code)
             
-            elif operation.operation_type == 'append':
+            elif operation.operation_type in ('append', 'remove'):
                 if len(operation.operands) < 2:
-                    raise ValueError("Append operation requires list variable and item")
+                    raise ValueError(
+                        f"{operation.operation_type} operation requires list variable and item"
+                    )
                 list_var = operation.operands[0]
-                item = operation.operands[1]
-                template = self.TEMPLATES['list_append']
+                item = format_literal(operation.operands[1])
+                template_key = (
+                    'list_append' if operation.operation_type == 'append' else 'list_remove'
+                )
+                template = self.TEMPLATES[template_key]
                 code = template.format(list_var=list_var, item=item)
                 code_lines.append(code)
             
+            elif operation.operation_type == 'get':
+                if len(operation.operands) < 2:
+                    raise ValueError("get operation requires collection and key")
+                collection = operation.operands[0]
+                index = format_index(operation.operands[1])
+                result = operation.result_variable or 'result'
+                code_lines.append(f'{result} = {collection}[{index}]')
+            
             else:
-                code_lines.append(f"# {operation.operation_type} operation")
+                raise ValueError(f"Unsupported data operation: {operation.operation_type}")
         
         return '\n'.join(code_lines)
     
@@ -270,18 +286,33 @@ class CodeGenerator:
         """Format condition text to valid Python boolean expression"""
         condition = condition_text.strip()
         
-        replacements = {
-            ' equals ': ' == ',
-            ' is equal to ': ' == ',
-            ' is ': ' == ',
-            ' greater than ': ' > ',
-            ' less than ': ' < ',
-            ' and ': ' and ',
-            ' or ': ' or ',
-            ' not ': ' not ',
-        }
+        # Compound phrases first so 'is' is not replaced on its own
+        # (e.g. "age is greater than 18" must become "age > 18", not "age == > 18").
+        replacements = [
+            (' is not equal to ', ' != '),
+            (' is greater than or equal to ', ' >= '),
+            (' is less than or equal to ', ' <= '),
+            (' is greater than ', ' > '),
+            (' is less than ', ' < '),
+            (' is equal to ', ' == '),
+            (' not equal to ', ' != '),
+            (' greater than or equal to ', ' >= '),
+            (' less than or equal to ', ' <= '),
+            (' equals ', ' == '),
+            (' greater than ', ' > '),
+            (' less than ', ' < '),
+            (' is ', ' == '),
+            (' and ', ' and '),
+            (' or ', ' or '),
+            (' not ', ' not '),
+        ]
         
-        for pattern, replacement in replacements.items():
+        for pattern, replacement in replacements:
             condition = condition.replace(pattern, replacement)
+        
+        # Bare literals are not valid Python (true -> NameError, not False/True)
+        condition = re.sub(r'\btrue\b', 'True', condition, flags=re.IGNORECASE)
+        condition = re.sub(r'\bfalse\b', 'False', condition, flags=re.IGNORECASE)
+        condition = re.sub(r'\bnone\b', 'None', condition, flags=re.IGNORECASE)
         
         return condition

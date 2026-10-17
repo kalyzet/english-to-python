@@ -58,7 +58,7 @@ class ErrorHandler:
         }
     
     @staticmethod
-    def generate_informative_error(error_type: str, original_input: str, specific_issue: str = None) -> str:
+    def generate_informative_error(error_type: str, original_input: str, specific_issue: Optional[str] = None) -> str:
         """Generate informative error messages (Requirement 5.1)"""
         examples = ErrorHandler.get_input_examples()
         
@@ -159,7 +159,7 @@ class TranslationEngine:
     Main Translation Engine that coordinates parsing and code generation
     """
     
-    def __init__(self):
+    def __init__(self) -> None:
         self.input_parser = InputParser()
         self.code_generator = CodeGenerator()
         self.warnings: List[TranslationWarning] = []
@@ -201,6 +201,17 @@ class TranslationEngine:
             ambiguity_warnings = self._check_for_ambiguity(parsed_sentence)
             for warning in ambiguity_warnings:
                 self.warnings.append(warning)
+            
+            # Report actions the parser could not translate
+            unrecognized_actions = parsed_sentence.metadata.get('unrecognized_actions') or []
+            if unrecognized_actions:
+                self.warnings.append(TranslationWarning(
+                    warning_type="unrecognized_action",
+                    message="Some actions were not recognized and became 'pass': "
+                            + "; ".join(unrecognized_actions),
+                    severity="medium",
+                    suggestion="Try 'print <text>', 'set x to <value>', or 'increment x'",
+                ))
             
             # Generate Python code
             try:
@@ -323,12 +334,10 @@ class TranslationEngine:
     
     def _check_for_problematic_code(self, python_code: str) -> List[TranslationWarning]:
         """Check generated code for potential runtime issues"""
-        warnings = []
+        warnings: List[TranslationWarning] = []
         
         if not python_code.strip():
             return warnings
-        
-        code_lower = python_code.lower()
         
         # Check for division operations (potential division by zero)
         if '/' in python_code and '//' not in python_code:
@@ -451,6 +460,11 @@ class TranslationEngine:
         # If single line, try to detect multiple statements
         if len(statements) == 1:
             single_line = statements[0]
+            
+            # A conditional/loop that starts the sentence owns the whole line:
+            # "if x then set y to 10 else print done" is ONE statement.
+            if self.input_parser.starts_with_control_structure(single_line):
+                return [single_line]
             
             # Look for patterns that indicate statement boundaries
             # More specific patterns to avoid false positives

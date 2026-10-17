@@ -1,0 +1,11 @@
+[package]
+name = "ttc-gui"
+version.workspace = true
+edition.workspace = true
+description = "GUI for the English-to-Python translator (Rust shell + Python engine worker)"
+
+[dependencies]
+eframe.workspace = true
+egui.workspace = true
+serde.workspace = true
+serde_json.workspace = true

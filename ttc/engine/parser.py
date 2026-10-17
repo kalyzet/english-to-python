@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from enum import Enum
 
 from .parsed_sentence import ParsedSentence, Operation, Condition, PatternType
+from .literals import format_literal, format_index
 
 
 class TokenType(Enum):
@@ -28,9 +29,9 @@ class Token:
     text: str
     token_type: TokenType
     position: int
-    metadata: Dict[str, Any] = None
-    
-    def __post_init__(self):
+    metadata: Optional[Dict[str, Any]] = None
+
+    def __post_init__(self) -> None:
         if self.metadata is None:
             self.metadata = {}
 
@@ -38,33 +39,35 @@ class Token:
 class PatternMatcher:
     """Handles pattern matching for different types of English constructs"""
     
-    def __init__(self):
+    def __init__(self) -> None:
+        # Operand: decimal number ("0.1") or word/identifier ("total", "x")
+        op = r'(\d+(?:\.\d+)?|\w+)'
         self._arithmetic_patterns = [
             # Division patterns (check first to avoid conflicts)
-            (r'\bdivide\s+(\w+)\s+by\s+(\w+)', 'divide'),
-            (r'\b(\w+)\s+divided\s+by\s+(\w+)', 'divide'),
-            (r'\b(?:split)\s+(\w+)\s+(?:by|with|/)\s+(\w+)', 'divide'),
-            (r'\b(\w+)\s*/\s*(\w+)', 'divide'),
-            (r'\bcalculate\s+(\w+)\s+divided\s+by\s+(\w+)', 'divide'),
+            (rf'\bdivide\s+{op}\s+by\s+{op}', 'divide'),
+            (rf'\b{op}\s+divided\s+by\s+{op}', 'divide'),
+            (rf'\b(?:split)\s+{op}\s+(?:by|with|/)\s+{op}', 'divide'),
+            (rf'\b{op}\s*/\s*{op}', 'divide'),
+            (rf'\bcalculate\s+{op}\s+divided\s+by\s+{op}', 'divide'),
             
             # Addition patterns
-            (r'\b(?:add|plus|sum)\s+(\w+)\s+(?:and|with|\+)\s+(\w+)', 'add'),
-            (r'\b(\w+)\s+plus\s+(\w+)', 'add'),
-            (r'\b(\w+)\s*\+\s*(\w+)', 'add'),
-            (r'\bcalculate\s+(\w+)\s+plus\s+(\w+)', 'add'),
-            (r'\bcalculate\s+(?:the\s+)?sum\s+of\s+(\w+)\s+and\s+(\w+)', 'add'),
+            (rf'\b(?:add|plus|sum)\s+{op}\s+(?:and|with|\+)\s+{op}', 'add'),
+            (rf'\b{op}\s+plus\s+{op}', 'add'),
+            (rf'\b{op}\s*\+\s*{op}', 'add'),
+            (rf'\bcalculate\s+{op}\s+plus\s+{op}', 'add'),
+            (rf'\bcalculate\s+(?:the\s+)?sum\s+of\s+{op}\s+and\s+{op}', 'add'),
             
             # Subtraction patterns
-            (r'\b(?:subtract|minus)\s+(\w+)\s+(?:from|and)\s+(\w+)', 'subtract'),
-            (r'\b(\w+)\s+minus\s+(\w+)', 'subtract'),
-            (r'\b(\w+)\s*-\s*(\w+)', 'subtract'),
-            (r'\bcalculate\s+(\w+)\s+minus\s+(\w+)', 'subtract'),
+            (rf'\b(?:subtract|minus)\s+{op}\s+(?:from|and)\s+{op}', 'subtract'),
+            (rf'\b{op}\s+minus\s+{op}', 'subtract'),
+            (rf'\b{op}\s*-\s*{op}', 'subtract'),
+            (rf'\bcalculate\s+{op}\s+minus\s+{op}', 'subtract'),
             
             # Multiplication patterns (check after division to avoid conflicts)
-            (r'\bmultiply\s+(\w+)\s+(?:by|and|\*)\s+(\w+)', 'multiply'),
-            (r'\b(\w+)\s+times\s+(\w+)', 'multiply'),
-            (r'\b(\w+)\s*\*\s*(\w+)', 'multiply'),
-            (r'\bcalculate\s+(\w+)\s+times\s+(\w+)', 'multiply'),
+            (rf'\bmultiply\s+{op}\s+(?:by|and|\*)\s+{op}', 'multiply'),
+            (rf'\b{op}\s+times\s+{op}', 'multiply'),
+            (rf'\b{op}\s*\*\s*{op}', 'multiply'),
+            (rf'\bcalculate\s+{op}\s+times\s+{op}', 'multiply'),
         ]
         
         self._assignment_patterns = [
@@ -72,7 +75,8 @@ class PatternMatcher:
             (r'\bcreate\s+variable\s+(\w+)\s+with\s+value\s+(.+)', 'assign'),
             # More specific assignment pattern - avoid matching arithmetic expressions
             (r'\b([a-zA-Z_]\w*)\s*=\s*([^+\-*/=<>!]+)', 'assign'),
-            (r'\bassign\s+(.+)\s+to\s+(\w+)', 'assign'),
+            # Value first, variable second: "assign 42 to answer"
+            (r'\bassign\s+(.+)\s+to\s+(\w+)', 'assign_to'),
         ]
         
         self._conditional_patterns = [
@@ -85,12 +89,14 @@ class PatternMatcher:
             (r'\bunless\s+(.+?)\s+then\s+(.+)$', 'conditional'),
         ]
         
+        # Loop statements must start the sentence (anchored) so that words like
+        # "while"/"loop" appearing as data ("add while to list a") stay data ops.
         self._loop_patterns = [
-            (r'\brepeat\s+(\d+)\s+times?\s*:?\s*(.+)?', 'repeat'),
-            (r'\bloop\s+through\s+(\w+)', 'loop_through'),
-            (r'\bloop\s+(.+)', 'loop'),
-            (r'\bfor\s+each\s+(\w+)\s+in\s+(\w+)\s*:?\s*(.+)?', 'for_each'),
-            (r'\bwhile\s+(.+?)\s*:?\s*(.+)?', 'while'),
+            (r'\A\s*repeat\s+(\d+)\s+times?\s*:?\s*(.+)?', 'repeat'),
+            (r'\A\s*loop\s+through\s+(\w+)', 'loop_through'),
+            (r'\A\s*loop\s+(.+)', 'loop'),
+            (r'\A\s*for\s+each\s+(\w+)\s+in\s+(\w+)\s*:?\s*(.+)?', 'for_each'),
+            (r'\A\s*while\s+(.+?)\s*:?\s*(.+)?', 'while'),
         ]
         
         self._data_operation_patterns = [
@@ -153,7 +159,19 @@ class InputParser:
     Main Input Parser class for analyzing and parsing English sentences
     """
     
-    def __init__(self):
+    # Words treated as variables when printing (avoids accidental NameError)
+    COMMON_VARS = {
+        'age', 'score', 'temperature', 'humidity', 'count',
+        'total', 'result', 'status', 'level', 'lives', 'name',
+    }
+    
+    # Action keywords that start a loop/branch body after a condition
+    ACTION_KEYWORDS_RE = re.compile(
+        r'\b(print|set|increment|decrement|add|subtract|multiply|divide|create|remove|get)\b',
+        re.IGNORECASE,
+    )
+    
+    def __init__(self) -> None:
         self.pattern_matcher = PatternMatcher()
     
     def tokenize_input(self, sentence: str) -> List[Token]:
@@ -204,6 +222,22 @@ class InputParser:
         # Variables (default for other words)
         return TokenType.VARIABLE
     
+    def starts_with_control_structure(self, text: str) -> bool:
+        """
+        True when a conditional or loop pattern begins at the very start of the
+        text (so the rest of the line belongs to that statement, not a new one).
+        """
+        text_lower = text.lower()
+        patterns = (
+            self.pattern_matcher._conditional_patterns
+            + self.pattern_matcher._loop_patterns
+        )
+        for pattern, _operation in patterns:
+            match = re.search(pattern, text_lower, re.IGNORECASE | re.DOTALL)
+            if match and match.start() == 0:
+                return True
+        return False
+    
     def identify_pattern(self, sentence: str) -> PatternType:
         """
         Identify the main pattern type of the sentence
@@ -232,11 +266,11 @@ class InputParser:
         
         return PatternType.UNKNOWN
     
-    def extract_variables(self, sentence: str, pattern_type: PatternType = None) -> Dict[str, Any]:
+    def extract_variables(self, sentence: str, pattern_type: Optional[PatternType] = None) -> Dict[str, Any]:
         """
         Extract variable names and values from the sentence
         """
-        variables = {}
+        variables: Dict[str, Any] = {}
         
         # For assignment patterns, don't extract any variables
         # since the assignment operation will handle everything
@@ -280,6 +314,15 @@ class InputParser:
         if match_result:
             operation_type, operands = match_result
             
+            # "subtract X from Y" means Y - X, so reverse the captured groups
+            if operation_type == 'subtract':
+                from_match = re.search(
+                    r'\bsubtract\s+(\d+(?:\.\d+)?|\w+)\s+from\s+(\d+(?:\.\d+)?|\w+)',
+                    sentence, re.IGNORECASE
+                )
+                if from_match:
+                    operands = [from_match.group(2), from_match.group(1)]
+            
             # Clean operands
             cleaned_operands = []
             for operand in operands:
@@ -306,8 +349,14 @@ class InputParser:
             operation_type, parts = match_result
             
             if len(parts) >= 2:
-                var_name = parts[0].strip()
-                value = parts[1].strip()
+                if operation_type == 'assign_to':
+                    # "assign VALUE to VARIABLE" captures value first
+                    value, var_name = parts[0], parts[1]
+                else:
+                    var_name, value = parts[0], parts[1]
+                
+                var_name = var_name.strip()
+                value = value.strip()
                 
                 # Format the value properly for Python
                 formatted_value = self._format_assignment_value(value)
@@ -320,6 +369,27 @@ class InputParser:
                 operations.append(operation)
         
         return operations
+    
+    @staticmethod
+    def _split_items(items: str) -> List[str]:
+        """Split a comma/and separated item list into individual raw items"""
+        if not items:
+            return []
+        parts = re.split(r'\s*,\s*|\s+and\s+', items)
+        return [part.strip() for part in parts if part.strip()]
+    
+    def _format_dict_entries(self, items: str) -> List[str]:
+        """Turn 'name John and age 25' into ['\"name\": \"John\"', '\"age\": 25']"""
+        entries = []
+        for part in self._split_items(items):
+            key_value = part.split(None, 1)
+            key = key_value[0].rstrip(':,')
+            if len(key_value) == 2 and key_value[1].strip():
+                value = self._format_assignment_value(key_value[1].strip())
+            else:
+                value = '""'
+            entries.append(f'"{key}": {value}')
+        return entries
     
     def _parse_data_operation(self, sentence: str) -> List[Operation]:
         """Parse data structure operations from sentence"""
@@ -338,9 +408,14 @@ class InputParser:
                 data_type = 'list' if operation_type == 'create_list' else 'dict'
                 result_var = 'new_list' if data_type == 'list' else 'new_dict'
                 
+                if data_type == 'dict':
+                    operands = self._format_dict_entries(items)
+                else:
+                    operands = self._split_items(items)
+                
                 operation = Operation(
                     operation_type="create",
-                    operands=[items] if items else [],
+                    operands=operands,
                     result_variable=result_var
                 )
                 operations.append(operation)
@@ -353,8 +428,19 @@ class InputParser:
                     
                     operation = Operation(
                         operation_type=op_type,
-                        operands=[item, list_name],
+                        operands=[list_name, item],
                         result_variable=list_name
+                    )
+                    operations.append(operation)
+            
+            elif operation_type == 'get_item':
+                if len(parts) >= 2:
+                    key = parts[0].strip()
+                    list_name = parts[1].strip()
+                    operation = Operation(
+                        operation_type="get",
+                        operands=[list_name, key],
+                        result_variable="result"
                     )
                     operations.append(operation)
         
@@ -393,55 +479,95 @@ class InputParser:
         
         return variables
     
-    def _format_action(self, action_text: str) -> str:
+    def _format_action(
+        self,
+        action_text: str,
+        known_vars: Optional[List[str]] = None,
+        unrecognized: Optional[List[str]] = None,
+    ) -> str:
         """Format action text to valid Python code that can be executed"""
         action = action_text.strip()
+        if not action:
+            return 'pass'
+        
+        known = {var for var in (known_vars or []) if var}
+        
+        def _record_unrecognized() -> str:
+            if unrecognized is not None:
+                unrecognized.append(action)
+            return 'pass'
+        
+        action_lower = action.lower()
         
         # Handle print statements
-        if action.lower().startswith('print '):
-            # Extract what to print
-            print_content = action[6:].strip()  # Remove 'print '
+        if action_lower == 'print':
+            return 'print()'
+        if action_lower.startswith('print '):
+            print_content = action[6:].strip()
+            if not print_content:
+                return 'print()'
             
-            # Handle special keywords that should be treated as strings
-            special_keywords = ['pass', 'fail', 'true', 'false', 'none', 'adult', 'minor', 
-                              'hot', 'cold', 'normal', 'excellent', 'good', 'poor', 'empty',
-                              'running', 'stopped', 'active', 'inactive', 'high_score', 
-                              'normal_score', 'level_up', 'continue_playing', 'game_over',
-                              'still_alive', 'bonus_life', 'humid', 'windy', 'calm',
-                              'extreme_heat', 'danger', 'safe', 'very_hot', 'good_math',
-                              'poor_math', 'need_improvement', 'excellent_english', 
-                              'good_english', 'passed', 'failed', 'member_discount',
-                              'no_discount', 'bulk_discount', 'regular_price', 'expensive',
-                              'affordable', 'twenty_years_old', 'twenty', 'old', 'young']
+            # Already-quoted string: print("hello world")
+            if ((print_content.startswith('"') and print_content.endswith('"')) or
+                    (print_content.startswith("'") and print_content.endswith("'"))):
+                return f'print({print_content})'
             
-            # Check if it's a special keyword or common output that should be a string
-            if (print_content.lower() in special_keywords or 
-                not print_content.isidentifier() or
-                print_content.lower() in ['pass', 'fail']):
+            # Known variables are printed directly, everything else is a string
+            if print_content.isidentifier():
+                if print_content in known or print_content in self.COMMON_VARS:
+                    return f'print({print_content})'
                 return f'print("{print_content}")'
-            else:
-                # Check if it looks like a variable that might not be defined
-                # For safety, treat most single words as strings unless they're clearly variables
-                if print_content.isidentifier() and len(print_content) > 2:
-                    # Check if it's a common variable name pattern
-                    common_vars = ['age', 'score', 'temperature', 'humidity', 'count', 
-                                 'total', 'result', 'status', 'level', 'lives', 'name']
-                    if any(var in print_content.lower() for var in common_vars):
-                        return f'print({print_content})'
-                    else:
-                        # Treat as string to avoid NameError
-                        return f'print("{print_content}")'
-                else:
-                    # Treat as string literal
-                    return f'print("{print_content}")'
+            
+            return f'print("{print_content}")'
         
-        # Handle other common actions
-        elif action.lower().startswith('set '):
-            # Handle assignment within conditional
-            return action  # Let assignment parser handle this
+        # Handle assignment within a branch: "set x to 10"
+        if action_lower.startswith('set '):
+            operations = self._parse_assignment_operation(action)
+            if operations and operations[0].result_variable and operations[0].operands:
+                operation = operations[0]
+                return f'{operation.result_variable} = {operation.operands[0]}'
+            return _record_unrecognized()
         
-        # Default: return as comment if we can't parse it
-        return f'# {action}'
+        # increment / decrement
+        increment_match = re.match(r'^(increment|decrement)\s+(\w+)$', action, re.IGNORECASE)
+        if increment_match:
+            operator = '+=' if increment_match.group(1).lower() == 'increment' else '-='
+            return f'{increment_match.group(2)} {operator} 1'
+        
+        # Arithmetic action: "add 1 and 2" / "multiply x by 2"
+        arithmetic_ops = self._parse_arithmetic_operation(action)
+        if arithmetic_ops:
+            operation = arithmetic_ops[0]
+            if len(operation.operands) >= 2:
+                operator = {'add': '+', 'subtract': '-', 'multiply': '*', 'divide': '/'}[
+                    operation.operation_type
+                ]
+                result = operation.result_variable or 'result'
+                return f'{result} = {operation.operands[0]} {operator} {operation.operands[1]}'
+        
+        # Data action: "add x to my_list" / "remove x from my_list" / "get x from list"
+        data_ops = self._parse_data_operation(action)
+        if data_ops:
+            rendered = self._render_data_operation(data_ops[0])
+            if rendered is not None:
+                return rendered
+        
+        # Unrecognized action
+        return _record_unrecognized()
+    
+    def _render_data_operation(self, operation: Operation) -> Optional[str]:
+        """Render a single data operation as one line of Python code"""
+        if operation.operation_type == 'append' and len(operation.operands) >= 2:
+            list_var, item = operation.operands[0], operation.operands[1]
+            return f'{list_var}.append({format_literal(item)})'
+        if operation.operation_type == 'remove' and len(operation.operands) >= 2:
+            list_var, item = operation.operands[0], operation.operands[1]
+            return f'{list_var}.remove({format_literal(item)})'
+        if operation.operation_type == 'get' and len(operation.operands) >= 2:
+            list_var, key = operation.operands[0], operation.operands[1]
+            result = operation.result_variable or 'result'
+            return f'{result} = {list_var}[{format_index(key)}]'
+        return None
     
     def _format_assignment_value(self, value: str) -> str:
         """Format assignment value to proper Python syntax"""
@@ -475,6 +601,97 @@ class InputParser:
         # For everything else, treat as string
         return f'"{value}"'
     
+    def _parse_loop(self, sentence: str, parsed: ParsedSentence) -> None:
+        """Parse loop statements and fill loop metadata for the code generator"""
+        match_result = self.pattern_matcher.match_loop(sentence)
+        if not match_result:
+            return
+        
+        operation, _parts = match_result
+        unrecognized: List[str] = []
+        known_vars: List[str] = []
+        body_text = ''
+        
+        if operation == 'repeat':
+            repeat_match = re.search(
+                r'\brepeat\s+(\d+)\s+times?\s*:?\s*(.*)$', sentence,
+                re.IGNORECASE | re.DOTALL,
+            )
+            if not repeat_match:
+                raise ValueError("Could not parse repeat count")
+            parsed.metadata['loop_type'] = 'repeat'
+            parsed.metadata['count'] = repeat_match.group(1)
+            body_text = repeat_match.group(2).strip()
+        
+        elif operation == 'for_each':
+            for_match = re.search(
+                r'\bfor\s+each\s+(\w+)\s+in\s+(\w+)\s*:?\s*(.*)$', sentence,
+                re.IGNORECASE | re.DOTALL,
+            )
+            if not for_match:
+                raise ValueError("Could not parse for-each loop")
+            item = for_match.group(1)
+            parsed.metadata['loop_type'] = 'for_each'
+            parsed.metadata['item'] = item
+            parsed.metadata['collection'] = for_match.group(2)
+            body_text = for_match.group(3).strip()
+            known_vars = [item]
+        
+        elif operation == 'loop_through':
+            through_match = re.search(
+                r'\bloop\s+through\s+(\w+)\s*:?\s*(.*)$', sentence,
+                re.IGNORECASE | re.DOTALL,
+            )
+            if not through_match:
+                raise ValueError("Could not parse loop collection")
+            parsed.metadata['loop_type'] = 'for_each'
+            parsed.metadata['item'] = 'item'
+            parsed.metadata['collection'] = through_match.group(1)
+            body_text = through_match.group(2).strip()
+            known_vars = ['item']
+        
+        elif operation == 'while':
+            rest = re.sub(r'^\s*while\s+', '', sentence, flags=re.IGNORECASE).strip()
+            action_match = self.ACTION_KEYWORDS_RE.search(rest)
+            if action_match:
+                condition_text = rest[:action_match.start()].strip()
+                # Drop the "do" separator between condition and action
+                # (e.g. "x greater than 0 do print hi" -> condition "x greater than 0")
+                condition_text = re.sub(
+                    r'\s+do$', '', condition_text, flags=re.IGNORECASE
+                ).strip()
+                body_text = rest[action_match.start():].strip()
+            else:
+                do_match = re.search(r'\s+do\s+', rest, re.IGNORECASE)
+                if do_match:
+                    condition_text = rest[:do_match.start()].strip()
+                    body_text = rest[do_match.end():].strip()
+                else:
+                    condition_text = rest
+                    body_text = ''
+            
+            if not condition_text:
+                raise ValueError("While loop requires a condition")
+            
+            parsed.add_condition(Condition(
+                condition_text=condition_text,
+                condition_type='while',
+                variables_used=self._extract_variables_from_condition(condition_text),
+            ))
+            parsed.metadata['loop_type'] = 'while'
+            known_vars = list(parsed.conditions[-1].variables_used)
+        
+        else:
+            # Generic "loop <body>" is ambiguous
+            raise ValueError(
+                "Ambiguous 'loop' statement: use 'loop through <collection>', "
+                "'repeat <N> times <action>', or 'while <condition> <action>'"
+            )
+        
+        parsed.metadata['body'] = self._format_action(body_text, known_vars, unrecognized)
+        if unrecognized:
+            parsed.metadata['unrecognized_actions'] = unrecognized
+    
     def parse_sentence(self, sentence: str) -> ParsedSentence:
         """
         Main method to parse an English sentence into a ParsedSentence object
@@ -505,6 +722,11 @@ class InputParser:
                 parsed.add_operation(op)
         
         elif parsed.pattern_type == PatternType.DATA_OPERATION:
+            match_result = self.pattern_matcher.match_data_operation(sentence)
+            if match_result and match_result[0] in ('create_list', 'create_dict'):
+                parsed.metadata['data_type'] = (
+                    'list' if match_result[0] == 'create_list' else 'dict'
+                )
             operations = self._parse_data_operation(sentence)
             for op in operations:
                 parsed.add_operation(op)
@@ -514,19 +736,34 @@ class InputParser:
             for cond in conditions:
                 parsed.add_condition(cond)
             
+            known_vars: List[str] = []
+            if conditions:
+                known_vars = list(conditions[0].variables_used)
+            unrecognized: List[str] = []
+            
             # Extract action parts from conditional statement
             match_result = self.pattern_matcher.match_conditional(sentence)
             if match_result:
-                condition_type, parts = match_result
+                _condition_type, parts = match_result
                 if len(parts) >= 2 and parts[1]:
                     # Extract then_block action
                     then_action = parts[1].strip()
-                    parsed.metadata['then_block'] = self._format_action(then_action)
+                    parsed.metadata['then_block'] = self._format_action(
+                        then_action, known_vars, unrecognized
+                    )
                 
                 if len(parts) >= 3 and parts[2]:
                     # Extract else_block action
                     else_action = parts[2].strip()
-                    parsed.metadata['else_block'] = self._format_action(else_action)
+                    parsed.metadata['else_block'] = self._format_action(
+                        else_action, known_vars, unrecognized
+                    )
+            
+            if unrecognized:
+                parsed.metadata['unrecognized_actions'] = unrecognized
+        
+        elif parsed.pattern_type == PatternType.LOOP:
+            self._parse_loop(sentence, parsed)
         
         # Add metadata
         parsed.metadata['tokens'] = len(self.tokenize_input(sentence))
@@ -577,7 +814,8 @@ class InputParser:
             r'\bexec\b',  # Match exec with or without parentheses
             r'\beval\b',  # Match eval with or without parentheses
             r'\b__.*__\b',
-            r'\bopen\s*\(',
+            r'\bopen\b',  # File access, with or without parentheses
+            r'\b__import__\b',
         ]
         
         for pattern in dangerous_patterns:

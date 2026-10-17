@@ -25,7 +25,7 @@ Expected Output: age = 25
 
 ```
 Input: set name to John
-Expected Output: name = John
+Expected Output: name = "John"
 ```
 
 **Penjelasan:** Membuat variabel `name` dengan nilai John
@@ -44,7 +44,7 @@ Expected Output: result = 10 + 5
 ```
 Input: if age greater than 18 then print adult
 Expected Output: if age > 18:
-                     print(adult)
+    print("adult")
 ```
 
 **Penjelasan:** Percabangan IF-THEN sederhana
@@ -57,7 +57,7 @@ Expected Output: if age > 18:
 
 ```
 Input: set student_name to Alice
-Expected Output: student_name = Alice
+Expected Output: student_name = "Alice"
 ```
 
 ### **Step 2: Setup Nilai Matematika**
@@ -79,9 +79,11 @@ Expected Output: english_score = 92
 ```
 Input: if math_score greater than 80 then print good_math else print need_improvement
 Expected Output: if math_score > 80:
-                     print(good_math)
-                 else:
-                     print(need_improvement)
+    print("good_math")
+else:
+    print("need_improvement")
+else:
+    print("need_improvement")
 ```
 
 ### **Step 5: Evaluasi Bahasa Inggris**
@@ -89,9 +91,11 @@ Expected Output: if math_score > 80:
 ```
 Input: if english_score greater than 90 then print excellent_english else print good_english
 Expected Output: if english_score > 90:
-                     print(excellent_english)
-                 else:
-                     print(good_english)
+    print("excellent_english")
+else:
+    print("good_english")
+else:
+    print("good_english")
 ```
 
 ### **Step 6: Hitung Rata-rata**
@@ -106,9 +110,11 @@ Expected Output: result = math_score + english_score
 ```
 Input: if result greater than 160 then print passed else print failed
 Expected Output: if result > 160:
-                     print("passed")
-                 else:
-                     print("failed")
+    print("passed")
+else:
+    print("failed")
+else:
+    print("failed")
 ```
 
 **🎯 Hasil Akhir:** Sistem penilaian lengkap dengan evaluasi per mata pelajaran dan kelulusan
@@ -143,9 +149,11 @@ Expected Output: wind_speed = 15
 ```
 Input: if temperature greater than 30 then print hot else print normal
 Expected Output: if temperature > 30:
-                     print(hot)
-                 else:
-                     print(normal)
+    print("hot")
+else:
+    print("normal")
+else:
+    print("normal")
 ```
 
 ### **Step 5: Evaluasi Kelembaban**
@@ -153,7 +161,7 @@ Expected Output: if temperature > 30:
 ```
 Input: when humidity greater than 70 do print humid
 Expected Output: if humidity > 70:
-                     print(humid)
+    print("humid")
 ```
 
 ### **Step 6: Evaluasi Angin**
@@ -161,9 +169,11 @@ Expected Output: if humidity > 70:
 ```
 Input: if wind_speed greater than 20 then print windy else print calm
 Expected Output: if wind_speed > 20:
-                     print(windy)
-                 else:
-                     print(calm)
+    print("windy")
+else:
+    print("calm")
+else:
+    print("calm")
 ```
 
 ### **Step 7: Peringatan Cuaca Ekstrem**
@@ -171,7 +181,7 @@ Expected Output: if wind_speed > 20:
 ```
 Input: if temperature greater than 40 then print extreme_heat
 Expected Output: if temperature > 40:
-                     print(extreme_heat)
+    print("extreme_heat")
 ```
 
 **🎯 Hasil Akhir:** Sistem monitoring cuaca dengan berbagai parameter
@@ -198,7 +208,7 @@ Expected Output: quantity = 3
 
 ```
 Input: set is_member to true
-Expected Output: is_member = true
+Expected Output: is_member = True
 ```
 
 ### **Step 4: Hitung Total**
@@ -219,10 +229,12 @@ Expected Output: total = 150000
 
 ```
 Input: if is_member equals true then print member_discount else print no_discount
-Expected Output: if is_member == true:
-                     print(member_discount)
-                 else:
-                     print(no_discount)
+Expected Output: if is_member == True:
+    print("member_discount")
+else:
+    print("no_discount")
+else:
+    print("no_discount")
 ```
 
 ### **Step 7: Cek Diskon Pembelian Besar**
@@ -230,7 +242,7 @@ Expected Output: if is_member == true:
 ```
 Input: if total greater than 100000 then print bulk_discount
 Expected Output: if total > 100000:
-                     print(bulk_discount)
+    print("bulk_discount")
 ```
 
 ### **Step 8: Hitung Pajak**
@@ -245,9 +257,11 @@ Expected Output: result = total * 0.1
 ```
 Input: if total greater than 200000 then print expensive else print affordable
 Expected Output: if total > 200000:
-                     print(expensive)
-                 else:
-                     print(affordable)
+    print("expensive")
+else:
+    print("affordable")
+else:
+    print("affordable")
 ```
 
 **🎯 Hasil Akhir:** Sistem kasir lengkap dengan diskon dan pajak
@@ -260,7 +274,7 @@ Expected Output: if total > 200000:
 
 ```
 Input: set player_name to Gamer123
-Expected Output: player_name = Gamer123
+Expected Output: player_name = "Gamer123"
 ```
 
 ### **Step 2: Setup Level**
@@ -303,9 +317,11 @@ Expected Output: current_score = 3000
 ```
 Input: if current_score greater than 5000 then print high_score else print normal_score
 Expected Output: if current_score > 5000:
-                     print(high_score)
-                 else:
-                     print(normal_score)
+    print("high_score")
+else:
+    print("normal_score")
+else:
+    print("normal_score")
 ```
 
 ### **Step 8: Cek Level Up**
@@ -313,9 +329,11 @@ Expected Output: if current_score > 5000:
 ```
 Input: if current_level greater than 10 then print level_up else print continue_playing
 Expected Output: if current_level > 10:
-                     print(level_up)
-                 else:
-                     print(continue_playing)
+    print("level_up")
+else:
+    print("continue_playing")
+else:
+    print("continue_playing")
 ```
 
 ### **Step 9: Cek Game Over**
@@ -323,9 +341,11 @@ Expected Output: if current_level > 10:
 ```
 Input: if lives_remaining equals 0 then print game_over else print still_alive
 Expected Output: if lives_remaining == 0:
-                     print(game_over)
-                 else:
-                     print(still_alive)
+    print("game_over")
+else:
+    print("still_alive")
+else:
+    print("still_alive")
 ```
 
 ### **Step 10: Bonus Lives**
@@ -333,7 +353,7 @@ Expected Output: if lives_remaining == 0:
 ```
 Input: when current_score greater than 2000 do print bonus_life
 Expected Output: if current_score > 2000:
-                     print(bonus_life)
+    print("bonus_life")
 ```
 
 **🎯 Hasil Akhir:** Sistem game scoring lengkap dengan berbagai kondisi

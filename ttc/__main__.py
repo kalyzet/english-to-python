@@ -2,12 +2,13 @@
 
 import argparse
 import sys
+from typing import List, Optional
 
 from . import __version__
 from .engine.translator import TranslationEngine
 
 
-def main(argv=None) -> int:
+def main(argv: Optional[List[str]] = None) -> int:
     parser = argparse.ArgumentParser(
         prog="python -m ttc",
         description="Translate English sentences into Python code.",

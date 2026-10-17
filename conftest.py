@@ -8,6 +8,16 @@ if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
 import pytest
+from hypothesis import settings, HealthCheck
+
+# Property tests spawn subprocesses / sleep by design; the 200ms default
+# deadline is too tight for them (but a hang still fails within 5s).
+settings.register_profile(
+    "ttc",
+    deadline=5000,
+    suppress_health_check=[HealthCheck.too_slow],
+)
+settings.load_profile("ttc")
 
 
 def pytest_collection_modifyitems(config, items):

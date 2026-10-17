@@ -104,7 +104,7 @@ class TranslationResult:
         """Check if the generated code is potentially executable"""
         return (
             self.success and 
-            self.python_code.strip() and 
+            bool(self.python_code.strip()) and 
             not self.has_critical_errors()
         )
     
@@ -135,7 +135,7 @@ class TranslationResult:
             summary = f"✓ Translation successful"
             if self.has_warnings():
                 summary += f" (with {len(self.warnings)} warnings)"
-            if self.has_execution_result():
+            if self.execution_result is not None:
                 if self.execution_result.success:
                     summary += " - Code executed successfully"
                 else:

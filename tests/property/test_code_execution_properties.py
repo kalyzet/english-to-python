@@ -375,7 +375,9 @@ class TestRuntimeErrorHandling:
             'reversed', 'round', 'set', 'setattr', 'slice', 'sorted',
             'str', 'sum', 'tuple', 'type', 'zip',
             # Python keywords and constants
-            'True', 'False', 'None'
+            'True', 'False', 'None',
+            # Predefined in the runner's exec_globals (ttc/runner.py)
+            '__name__', '__builtins__',
         } and
         not __import__('keyword').iskeyword(x)
     ) if x else False))
